@@ -30,7 +30,7 @@ class OutletAdminForm(forms.ModelForm):
         self.instance.description = channel_info['subtitle']
         self.instance.url = channel_info['url']
         self.instance.language = channel_info['language']
-        self.instance.updated = datetime.datetime(year=1970, month=1, day=1, tzinfo=timezone.utc)
+        self.instance.updated = None
 
         return self.cleaned_data
 

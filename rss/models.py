@@ -8,7 +8,7 @@ class Outlet(models.Model):
     rss_url = models.CharField('rss feed url', max_length=100)
     description = models.CharField(max_length=500, null=True)
     language = models.CharField(max_length=5, null=True)
-    updated = models.DateTimeField('date updated')
+    updated = models.DateTimeField('date updated', null=True)
 
     def __data__(self):
         return {
@@ -18,7 +18,7 @@ class Outlet(models.Model):
             'rss_url': self.rss_url,
             'description': self.description,
             'language': self.language,
-            'updated': self.updated.isoformat()
+            'updated': self.updated.isoformat() if self.updated else None
         }
 
     def __unicode__(self):
