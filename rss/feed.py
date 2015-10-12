@@ -1,4 +1,7 @@
 import logging
+
+logger = logging.getLogger(__name__)
+
 from time import mktime
 import datetime
 
@@ -39,31 +42,27 @@ class RSSFeed:
             except ValueError, e:
                 raise e
             except Exception, e:
-                logging.error(e)
+                logger.error(e)
                 raise ValueError('Failed to parse data from url, is it a valid RSS feed url?')
 
     def _parse_channel_info(self):
         if self.channel_info is None:
             self._parse_feed_data()
 
-            try:
-                updated = self.feed_data.feed.get('updated_parsed')
+            updated = self.feed_data.feed.get('updated_parsed')
 
-                # Some feeds do not provide last updated time
-                if updated:
-                    updated = RSSFeed._time_struct_to_datetime(updated)
+            # Some feeds do not provide last updated time
+            if updated:
+                updated = RSSFeed._time_struct_to_datetime(updated)
 
-                self.channel_info = {
-                    'title': self.feed_data.feed.title,
-                    'subtitle': self.feed_data.feed.get('subtitle'),
-                    'url': self.feed_data.feed.get('link'),
-                    'language': self.feed_data.feed.get('language'),
-                    'updated': updated,
-                    'rss_url': self.feed_url
-                }
-            except Exception, e:
-                logging.error(e)
-                raise
+            self.channel_info = {
+                'title': self.feed_data.feed.title,
+                'subtitle': self.feed_data.feed.get('subtitle'),
+                'url': self.feed_data.feed.get('link'),
+                'language': self.feed_data.feed.get('language'),
+                'updated': updated,
+                'rss_url': self.feed_url
+            }
 
     def _parse_entries_info(self):
         if self.entries is None:
