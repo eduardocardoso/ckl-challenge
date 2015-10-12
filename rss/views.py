@@ -27,3 +27,22 @@ def outlets(request):
 def outlet(request, outlet_id):
     data = get_object_or_404(Outlet, pk=outlet_id)
     return response(data)
+
+
+def authors(request, outlet_id):
+    data = get_list_or_404(Author.objects.order_by('name'), outlet_id=outlet_id)
+    return response(data)
+
+
+def author(request, outlet_id, author_id):
+    data = get_object_or_404(Author, outlet_id=outlet_id, pk=author_id)
+    return response(data)
+
+
+def articles(request, outlet_id):
+    data = get_list_or_404(Article.objects.order_by('-pub_date'), outlet_id=outlet_id)
+    return response(data)
+
+def article(request, outlet_id, article_id):
+    data = get_object_or_404(Article, id=article_id, outlet_id=outlet_id)
+    return response(data)
