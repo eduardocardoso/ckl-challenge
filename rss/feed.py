@@ -25,7 +25,7 @@ class RSSFeed:
         """
 
         unix_time = mktime(time_struct)
-        tz_aware = datetime.datetime.fromtimestamp(unix_time, tz=timezone.utc)
+        tz_aware = datetime.datetime.fromtimestamp(unix_time).replace(tzinfo=timezone.utc)
         return tz_aware
 
     def _parse_feed_data(self):
@@ -51,7 +51,7 @@ class RSSFeed:
 
                 # Some feeds do not provide last updated time
                 if updated:
-                    updated = RSSFeed._time_struct_to_datetime(self.feed_data.feed.get('updated_parsed'))
+                    updated = RSSFeed._time_struct_to_datetime(updated)
 
                 self.channel_info = {
                     'title': self.feed_data.feed.title,
