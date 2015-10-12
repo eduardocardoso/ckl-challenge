@@ -1,10 +1,12 @@
 import datetime
+import json
 
 from django.utils import timezone
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 
 from rss.feed import RSSFeed
-
+from rss.models import Outlet
+from rss import views
 
 # Create your tests here.
 
@@ -109,3 +111,38 @@ class RSSFeedTestCase(TestCase):
     def test_invalid_feed(self):
         self.assertRaises(ValueError, self.invalid_feed.get_channel_info)
         self.assertRaises(ValueError, self.invalid_feed.get_entries_info)
+
+
+class RestAPITestCase(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.outlet1 = Outlet.objects.create(name='Sample Feed', description="Description", url='http://example.org',
+                                             language='en-US',
+                                             updated=None)
+        self.outlet2 = Outlet.objects.create(name='Sample Feed 2', description="Description 2",
+                                             url='http://example2.org',
+                                             language='en-GB',
+                                             updated=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc))
+
+    def test_outlets_api(self):
+        expected = [self.outlet1.__data__(), self.outlet2.__data__()]
+
+        outlets_response = views.outlets(self.factory.get('/rss/outlets/'))
+
+        self.assertEqual(outlets_response.status_code, 200)
+
+        deserialized_data = json.loads(outlets_response.content)
+
+        self.assertEqual(deserialized_data, expected)
+
+
+    def test_outlet_api(self):
+        expected = self.outlet1.__data__()
+
+        outlets_response = views.outlet(self.factory.get('/rss/outlets/%s/'), self.outlet1.id)
+
+        self.assertEqual(outlets_response.status_code, 200)
+
+        deserialized_data = json.loads(outlets_response.content)
+
+        self.assertEqual(deserialized_data, expected)
