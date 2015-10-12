@@ -1,11 +1,9 @@
-import datetime
-
 from django.contrib import admin
-from django.utils import timezone
 from django import forms
 
 from .feed import RSSFeed
 from .models import Outlet
+
 # Register your models here.
 
 class OutletAdminForm(forms.ModelForm):
