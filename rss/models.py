@@ -10,6 +10,17 @@ class Outlet(models.Model):
     language = models.CharField(max_length=5, null=True)
     updated = models.DateTimeField('date updated')
 
+    def __data__(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'url': self.url,
+            'rss_url': self.rss_url,
+            'description': self.description,
+            'language': self.language,
+            'updated': self.updated.isoformat()
+        }
+
     def __unicode__(self):
         return self.name
 
@@ -20,12 +31,23 @@ class Author(models.Model):
     profile = models.CharField(max_length=100, null=True)
     twitter = models.CharField(max_length=50, null=True)
 
+    def __data__(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'profile': self.profile,
+            'twitter': self.twitter,
+        }
+
     def __unicode__(self):
         return self.name
 
 
 class Tag(models.Model):
     term = models.CharField(max_length=200)
+
+    def __data__(self):
+        return self.term
 
     def __unicode__(self):
         return self.term
@@ -41,6 +63,21 @@ class Article(models.Model):
     url = models.CharField(max_length=250, unique=True)
     pub_date = models.DateTimeField('date published')
     content = models.TextField(null=True)
+
+    def __data__(self):
+        authors = list(author.__data__() for author in self.authors.all())
+        tags = list(tag.__data__() for tag in self.tags.all())
+
+        return {
+            'id': self.id,
+            'title': self.title,
+            'summary': self.summary,
+            'url': self.url,
+            'date': self.pub_date,
+            'content': self.content,
+            'tags': tags,
+            'authors': authors
+        }
 
     def __unicode__(self):
         return self.title
