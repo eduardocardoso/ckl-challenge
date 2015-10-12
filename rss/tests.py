@@ -5,8 +5,9 @@ from django.utils import timezone
 from django.test import TestCase, RequestFactory
 
 from rss.feed import RSSFeed
-from rss.models import Outlet
+from rss.models import Article, Author, Outlet
 from rss import views
+
 
 # Create your tests here.
 
@@ -123,6 +124,19 @@ class RestAPITestCase(TestCase):
                                              url='http://example2.org',
                                              language='en-GB',
                                              updated=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc))
+        self.author1 = Author(name='Author')
+        self.author2 = Author(name='Author 2', profile='http://plus.google.com/Author2', twitter='@author2')
+        self.outlet1.author_set.add(self.author1)
+        self.outlet1.author_set.add(self.author2)
+
+        self.article1 = Article(title='Title', summary='Summary', url='http://example.com/articles/1',
+                                pub_date=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc), content='Content')
+        self.article2 = Article(title='Title 2', summary='Summary 2', url='http://example.com/articles/2',
+                                pub_date=datetime.datetime(2002, 9, 7, 0, 1, 1, tzinfo=timezone.utc), content='Content 2')
+        self.outlet1.article_set.add(self.article1)
+        self.outlet1.article_set.add(self.article2)
+        self.article1.authors.add(self.author1, self.author2)
+        self.article2.authors.add(self.author1)
 
     def test_outlets_api(self):
         expected = [self.outlet1.__data__(), self.outlet2.__data__()]
@@ -139,10 +153,32 @@ class RestAPITestCase(TestCase):
     def test_outlet_api(self):
         expected = self.outlet1.__data__()
 
-        outlets_response = views.outlet(self.factory.get('/rss/outlets/%s/'), self.outlet1.id)
+        outlets_response = views.outlet(self.factory.get('/rss/outlets/1/'), self.outlet1.id)
 
         self.assertEqual(outlets_response.status_code, 200)
 
         deserialized_data = json.loads(outlets_response.content)
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_authors_api(self):
+        expected = [self.author1.__data__(), self.author2.__data__()]
+
+        response = views.authors(self.factory.get('/rss/outlets/1/authors/'), self.outlet1.id)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = json.loads(response.content)
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_author_api(self):
+        expected = self.author1.__data__()
+
+        response = views.author(self.factory.get('/rss/outlets/1/authors/1'), self.outlet1.id, self.author1.id)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = json.loads(response.content)
 
         self.assertEqual(deserialized_data, expected)
