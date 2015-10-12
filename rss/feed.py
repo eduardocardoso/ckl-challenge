@@ -34,10 +34,12 @@ class RSSFeed:
     def _parse_feed_data(self):
         if self.feed_data is None:
             try:
-                self.feed_data = feedparser.parse(self.feed_url)
+                feed_data = feedparser.parse(self.feed_url)
 
-                if not self.feed_data.version.startswith('rss'):
+                if not feed_data.version.startswith('rss'):
                     raise ValueError('Feed does not contain valid rss information.')
+                else:
+                    self.feed_data = feed_data
 
             except ValueError, e:
                 raise e
@@ -66,6 +68,8 @@ class RSSFeed:
 
     def _parse_entries_info(self):
         if self.entries is None:
+            self._parse_feed_data()
+
             self.entries = []
             for entry in self.feed_data.entries:
 
