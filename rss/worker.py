@@ -2,6 +2,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import threading
+
+from apscheduler.schedulers.blocking import BlockingScheduler
 from django.utils import timezone
 from django.db import IntegrityError
 
@@ -69,3 +72,19 @@ def run():
     logger.debug('Running at %s' % timezone.now().isoformat())
     for outlet in Outlet.objects.all():
         check_outlet(outlet)
+
+
+class Worker(threading.Thread):
+    def __init__(self, hours=0, minutes=0, seconds=0):
+        super(Worker, self).__init__()
+        if not (hours or minutes or seconds):
+            raise ValueError('Hours, minutes and seconds cannot be all equal to 0')
+
+        self.scheduler = BlockingScheduler()
+        self.job = self.scheduler.add_job(run, 'interval', hours=hours, minutes=minutes, seconds=seconds)
+
+    def run(self):
+        self.scheduler.start()
+
+    def stop(self, *args):
+        self.scheduler.shutdown()
