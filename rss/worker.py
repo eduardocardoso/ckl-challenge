@@ -43,8 +43,11 @@ def check_outlet(outlet):
 
     if outlet.updated is None or updated > outlet.updated:
         logger.info('Feed was updated at %s, fetching new items' % updated.isoformat())
+        entries = feed.get_entries_info()
 
-        for entry_info in feed.get_entries_info():
+        logger.info('Feed provided %s items.' % len(entries))
+
+        for entry_info in entries:
             try:
 
                 article = Article(**entry_info['entry_info'])
@@ -72,6 +75,7 @@ def run():
     logger.debug('Running at %s' % timezone.now().isoformat())
     for outlet in Outlet.objects.all():
         check_outlet(outlet)
+    logger.debug('Finished running at %s' % timezone.now().isoformat())
 
 
 class Worker(threading.Thread):
