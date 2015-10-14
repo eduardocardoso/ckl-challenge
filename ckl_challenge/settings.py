@@ -145,13 +145,17 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
+            'handlers': ['null'],
             'propagate': True,
             'level': 'INFO',
         },
         'rss': {
             'handlers': ['console'],
-            'level': 'DEBUG'
+            'level': 'INFO'
+        },
+        'apscheduler': {
+            'handlers': ['null'],
+            'level': 'INFO'
         }
     }
 }
