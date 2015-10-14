@@ -24,7 +24,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '2et8uyovgnnqq1buwgs6*_pwrdv)^kl06@0n-1mr0ujr3lcf8w'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 # Honor the 'X-Forwarded-Proto' header for request.is_secure()
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -81,16 +81,13 @@ WSGI_APPLICATION = 'ckl_challenge.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'ckl_challenge',
-        'USER': 'root',
-        'PASSWORD': 'root',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
-DATABASES['default'] = dj_database_url.config()
 
+if not DEBUG:
+    DATABASES['default'] = dj_database_url.config()
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.8/topics/i18n/
