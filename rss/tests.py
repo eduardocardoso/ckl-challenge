@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from django.utils import timezone
+from django.utils import timezone, dateparse
 from django.test import TestCase, RequestFactory
 
 from rss.feed import RSSFeed
@@ -139,7 +139,7 @@ class RestAPITestCase(TestCase):
         self.article2.authors.add(self.author1)
 
     def test_outlets_api(self):
-        expected = [self.outlet1.__data__(), self.outlet2.__data__()]
+        expected = [self.outlet1.__data__(), self.outlet2.__data__()]  # Ordered by name
 
         outlets_response = views.outlets(self.factory.get('/rss/outlets/'))
 
@@ -162,7 +162,7 @@ class RestAPITestCase(TestCase):
         self.assertEqual(deserialized_data, expected)
 
     def test_authors_api(self):
-        expected = [self.author1.__data__(), self.author2.__data__()]
+        expected = [self.author1.__data__(), self.author2.__data__()]  # Ordered by name
 
         response = views.authors(self.factory.get('/rss/outlets/1/authors/'), self.outlet1.id)
 
@@ -182,3 +182,33 @@ class RestAPITestCase(TestCase):
         deserialized_data = json.loads(response.content)
 
         self.assertEqual(deserialized_data, expected)
+
+    def test_articles_api(self):
+        expected = [self.article2.__data__(), self.article1.__data__()]  # Ordered by publication date from newest to oldest
+
+
+        response = views.articles(self.factory.get('/rss/outlets/1/articles/'), self.outlet1.id)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = json.loads(response.content)
+
+        # API response will provide date as text field so we have to parse here in order for the compare to succeed
+        for article in deserialized_data:
+            article['date'] = dateparse.parse_datetime(article['date'])
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_article_api(self):
+        expected = self.article1.__data__()
+
+        response = views.article(self.factory.get('/rss/outlets/1/articles/1'), self.outlet1.id, self.article1.id)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = json.loads(response.content)
+        
+        # API response will provide date as text field so we have to parse here in order for the compare to succeed
+        deserialized_data['date'] = dateparse.parse_datetime(deserialized_data['date'])
+
+        self.assertDictEqual(deserialized_data, expected)
