@@ -59,7 +59,7 @@ class Article(models.Model):
     tags = models.ManyToManyField(Tag)
 
     title = models.CharField(max_length=200)
-    summary = models.CharField(max_length=400)
+    summary = models.TextField()
     url = models.CharField(max_length=250, unique=True)
     pub_date = models.DateTimeField('date published')
     content = models.TextField(null=True)
