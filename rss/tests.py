@@ -4,11 +4,11 @@ import json
 from django.utils import timezone, dateparse
 from django.test import TestCase, RequestFactory
 
-from rss.feed import RSSFeed
-from rss.models import Article, Author, Outlet, Tag
 from rss import views
 
-
+from rss.feed import RSSFeed
+from rss.models import Article, Author, Outlet, Tag
+from rss.worker import run as worker_run
 
 
 # Create your tests here.
@@ -301,6 +301,38 @@ class RestAPITestCase(TestCase):
         deserialized_data = parse(response.content, 'date')
 
         self.assertEqual(deserialized_data, expected)
+
+
+class WorkerTestCase(TestCase):
+    def setUp(self):
+        self.valid_outlet = Outlet.objects.create(name='Sample Feed', description='For documentation <em>only</em>',
+                                                  url='http://example.org/', rss_url=RSSFeedTestCase.valid_rss)
+        self.invalid_outlet = Outlet(name='Invalid Feed', description='Invalid', url='http://invalid.org',
+                                     rss_url=RSSFeedTestCase.invalid_rss)
+
+    def test_worker_run_valid_outlet(self):
+        self.assertIsNone(self.valid_outlet.updated)
+        worker_run()
+        updated_outlet = Outlet.objects.get(pk=self.valid_outlet.id)
+        self.assertEqual(updated_outlet.updated, datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc))
+
+        articles = self.valid_outlet.article_set.all()
+        self.assertEqual(len(articles), 1)
+
+        article = articles[0]
+
+        self.assertEqual(article.title, u'First entry title')
+        self.assertEqual(article.summary, u'Watch out for <span>nasty\n    tricks</span>')
+        self.assertEqual(article.url, u'http://example.org/entry/3')
+        self.assertEqual(article.pub_date, datetime.datetime(2002, 9, 5, 0, 0, 1, tzinfo=timezone.utc))
+        self.assertEqual(article.content, None)
+
+    def test_worker_run_invalid_outlet(self):
+        try:
+            self.invalid_outlet.save()
+            self.assertRaises(ValueError, worker_run)
+        finally:
+            self.invalid_outlet.delete()
 
 
 def parse(data, datetime_field=None):
