@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 from django.shortcuts import get_list_or_404, get_object_or_404
+
 from .models import *
 
 
@@ -8,6 +9,7 @@ def response(data):
         return array_response(data)
     else:
         return single_object_response(data)
+
 
 def single_object_response(object):
     return JsonResponse(object.__data__())
@@ -29,6 +31,11 @@ def outlet(request, outlet_id):
     return response(data)
 
 
+def all_authors(request):
+    data = get_list_or_404(Author.objects.order_by('name'))
+    return response(data)
+
+
 def authors(request, outlet_id):
     data = get_list_or_404(Author.objects.order_by('name'), outlet_id=outlet_id)
     return response(data)
@@ -39,10 +46,27 @@ def author(request, outlet_id, author_id):
     return response(data)
 
 
+def all_articles(request):
+    data = get_list_or_404(Article.objects.order_by('-pub_date'))
+    return response(data)
+
+
 def articles(request, outlet_id):
     data = get_list_or_404(Article.objects.order_by('-pub_date'), outlet_id=outlet_id)
     return response(data)
 
+
 def article(request, outlet_id, article_id):
     data = get_object_or_404(Article, id=article_id, outlet_id=outlet_id)
+    return response(data)
+
+
+def tags(request):
+    data = get_list_or_404(Tag.objects.order_by('term'))
+    return response(data)
+
+
+def articles_by_tag(request, term):
+    tag = get_object_or_404(Tag, term=term)
+    data = get_list_or_404(Article.objects.order_by('-pub_date'), tags=tag)
     return response(data)

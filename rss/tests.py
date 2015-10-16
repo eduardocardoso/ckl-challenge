@@ -5,8 +5,9 @@ from django.utils import timezone, dateparse
 from django.test import TestCase, RequestFactory
 
 from rss.feed import RSSFeed
-from rss.models import Article, Author, Outlet
+from rss.models import Article, Author, Outlet, Tag
 from rss import views
+
 
 
 # Create your tests here.
@@ -132,11 +133,17 @@ class RestAPITestCase(TestCase):
         self.article1 = Article(title='Title', summary='Summary', url='http://example.com/articles/1',
                                 pub_date=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc), content='Content')
         self.article2 = Article(title='Title 2', summary='Summary 2', url='http://example.com/articles/2',
-                                pub_date=datetime.datetime(2002, 9, 7, 0, 1, 1, tzinfo=timezone.utc), content='Content 2')
+                                pub_date=datetime.datetime(2002, 9, 7, 0, 1, 1, tzinfo=timezone.utc),
+                                content='Content 2')
         self.outlet1.article_set.add(self.article1)
         self.outlet1.article_set.add(self.article2)
         self.article1.authors.add(self.author1, self.author2)
         self.article2.authors.add(self.author1)
+
+        self.tag1 = Tag.objects.create(term='Tag')
+        self.tag2 = Tag.objects.create(term='Tag 2')
+        self.article1.tags.add(self.tag1)
+        self.article2.tags.add(self.tag2)
 
     def test_outlets_api(self):
         expected = [self.outlet1.__data__(), self.outlet2.__data__()]  # Ordered by name
@@ -183,19 +190,26 @@ class RestAPITestCase(TestCase):
 
         self.assertEqual(deserialized_data, expected)
 
-    def test_articles_api(self):
-        expected = [self.article2.__data__(), self.article1.__data__()]  # Ordered by publication date from newest to oldest
+    def test_all_authors_api(self):
+        expected = [self.author1.__data__(), self.author2.__data__()]  # Ordered by name
 
-
-        response = views.articles(self.factory.get('/rss/outlets/1/articles/'), self.outlet1.id)
+        response = views.all_authors(self.factory.get('/rss/authors/'))
 
         self.assertEqual(response.status_code, 200)
 
         deserialized_data = json.loads(response.content)
 
-        # API response will provide date as text field so we have to parse here in order for the compare to succeed
-        for article in deserialized_data:
-            article['date'] = dateparse.parse_datetime(article['date'])
+        self.assertEqual(deserialized_data, expected)
+
+    def test_articles_api(self):
+        expected = [self.article2.__data__(),
+                    self.article1.__data__()]  # Ordered by publication date from newest to oldest
+
+        response = views.articles(self.factory.get('/rss/outlets/1/articles/'), self.outlet1.id)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
 
         self.assertEqual(deserialized_data, expected)
 
@@ -206,9 +220,65 @@ class RestAPITestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-        deserialized_data = json.loads(response.content)
-        
-        # API response will provide date as text field so we have to parse here in order for the compare to succeed
-        deserialized_data['date'] = dateparse.parse_datetime(deserialized_data['date'])
+        deserialized_data = parse(response.content, 'date')
 
-        self.assertDictEqual(deserialized_data, expected)
+        self.assertEqual(deserialized_data, expected)
+
+    def test_all_articles_api(self):
+        expected = [self.article2.__data__(),
+                    self.article1.__data__()]  # Ordered by publication date from newest to oldest
+
+        response = views.all_articles(self.factory.get('/rss/articles/'))
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_tags_api(self):
+        expected = [self.tag1.__data__(), self.tag2.__data__()]
+
+        response = views.tags(self.factory.get('/rss/tags'))
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content)
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_article_by_tags_api(self):
+        expected = [self.article1.__data__()]
+
+        response = views.articles_by_tag(self.factory.get('/rss/tags/Tag/articles/'), 'Tag')
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
+
+        self.assertEqual(deserialized_data, expected)
+
+
+def parse(data, datetime_field=None):
+    """
+    API response serializes datetime fields as string and json.loads does not parse it back as a datetime.
+    This function takes care of it
+
+    :param data: The JSON serialized string
+    :param datetime_field: The key on the dictionary that contains a datetime field
+    :return: The deserialized data
+    """
+
+    parsed_data = json.loads(data)
+    if datetime_field:
+        if isinstance(parsed_data, list):
+            for item in parsed_data:
+                date = item.get(datetime_field)
+                if date:
+                    item[datetime_field] = dateparse.parse_datetime(date)
+        elif isinstance(parsed_data, dict):
+            date = parsed_data.get(datetime_field)
+            if date:
+                parsed_data[datetime_field] = dateparse.parse_datetime(date)
+
+    return parsed_data
