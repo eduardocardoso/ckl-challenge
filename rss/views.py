@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_list_or_404, get_object_or_404
 
@@ -67,6 +68,17 @@ def tags(request):
 
 
 def articles_by_tag(request, term):
-    tag = get_object_or_404(Tag, term=term)
-    data = get_list_or_404(Article.objects.order_by('-pub_date'), tags=tag)
+    data = get_list_or_404(Article.objects.order_by('-pub_date'), tags__term=term)
     return response(data)
+
+
+def articles_search(request, search):
+    search_condition = Q(title__icontains=search) | Q(summary__icontains=search) \
+                       | Q(content__icontains=search) | Q(tags__term__icontains=search) \
+                       | Q(authors__name__icontains=search)
+    data = get_list_or_404(Article.objects.order_by('-pub_date'), search_condition)
+    cleaned_data = []
+    for article in data:
+        if article not in cleaned_data:
+            cleaned_data.append(article)
+    return response(cleaned_data)

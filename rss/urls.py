@@ -19,6 +19,8 @@ urlpatterns = [
     url(r'^outlets/(?P<outlet_id>[0-9]+)/articles/(?P<article_id>[0-9]+)/$', views.article, name='articles'),
     # # ex: /rss/articles/
     url(r'^articles/$', views.all_articles, name='all_articles'),
+    # # ex: /rss/articles/search/apple/
+    url(r'^articles/search/(?P<search>.+)/$', views.articles_search, name='articles_search'),
     # # ex: /rss/tags/
     url(r'^tags/$', views.tags, name='tags'),
     # # ex: /rss/tags/

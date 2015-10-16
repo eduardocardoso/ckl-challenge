@@ -10,6 +10,7 @@ from rss import views
 
 
 
+
 # Create your tests here.
 
 class RSSFeedTestCase(TestCase):
@@ -125,23 +126,24 @@ class RestAPITestCase(TestCase):
                                              url='http://example2.org',
                                              language='en-GB',
                                              updated=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc))
-        self.author1 = Author(name='Author')
-        self.author2 = Author(name='Author 2', profile='http://plus.google.com/Author2', twitter='@author2')
+        self.author1 = Author(name='Author1')
+        self.author2 = Author(name='Author2', profile='http://plus.google.com/Author2', twitter='@author2')
         self.outlet1.author_set.add(self.author1)
         self.outlet1.author_set.add(self.author2)
 
-        self.article1 = Article(title='Title', summary='Summary', url='http://example.com/articles/1',
-                                pub_date=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc), content='Content')
-        self.article2 = Article(title='Title 2', summary='Summary 2', url='http://example.com/articles/2',
+        self.article1 = Article(title='Title1', summary='Summary1', url='http://example.com/articles/1',
+                                pub_date=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc),
+                                content='Content1')
+        self.article2 = Article(title='Title2', summary='Summary2', url='http://example.com/articles/2',
                                 pub_date=datetime.datetime(2002, 9, 7, 0, 1, 1, tzinfo=timezone.utc),
-                                content='Content 2')
+                                content='Content2')
         self.outlet1.article_set.add(self.article1)
         self.outlet1.article_set.add(self.article2)
         self.article1.authors.add(self.author1, self.author2)
         self.article2.authors.add(self.author1)
 
-        self.tag1 = Tag.objects.create(term='Tag')
-        self.tag2 = Tag.objects.create(term='Tag 2')
+        self.tag1 = Tag.objects.create(term='Tag1')
+        self.tag2 = Tag.objects.create(term='Tag2')
         self.article1.tags.add(self.tag1)
         self.article2.tags.add(self.tag2)
 
@@ -250,7 +252,49 @@ class RestAPITestCase(TestCase):
     def test_article_by_tags_api(self):
         expected = [self.article1.__data__()]
 
-        response = views.articles_by_tag(self.factory.get('/rss/tags/Tag/articles/'), 'Tag')
+        response = views.articles_by_tag(self.factory.get('/rss/tags/Tag1/articles/'), 'Tag1')
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_articles_search(self):
+        test_tuples = [
+            # Articles search should search in articles title
+            ([self.article1.__data__()], 'title1'),
+            ([self.article2.__data__()], 'title2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'title'),
+
+            # Articles search should search in articles summary
+            ([self.article1.__data__()], 'summary1'),
+            ([self.article2.__data__()], 'summary2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'summary'),
+
+            # Articles search should search in articles content
+            ([self.article1.__data__()], 'content1'),
+            ([self.article2.__data__()], 'content2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'content'),
+
+            # Articles search should search in articles tags
+            ([self.article1.__data__()], 'tag1'),
+            ([self.article2.__data__()], 'tag2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'tag'),
+
+            # Articles search should search in articles authors
+            ([self.article2.__data__(), self.article1.__data__()], 'author1'),
+            ([self.article1.__data__()], 'author2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'author')
+        ]
+
+        for expected, term in test_tuples:
+            self.article_search_test(expected, term)
+
+
+    def article_search_test(self, expected, term):
+        endpoint = '/rss/articles/search/%s/' % term
+        response = views.articles_search(self.factory.get(endpoint), term)
 
         self.assertEqual(response.status_code, 200)
 
