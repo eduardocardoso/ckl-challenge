@@ -4,9 +4,11 @@ import json
 from django.utils import timezone, dateparse
 from django.test import TestCase, RequestFactory
 
-from rss.feed import RSSFeed
-from rss.models import Article, Author, Outlet
 from rss import views
+
+from rss.feed import RSSFeed
+from rss.models import Article, Author, Outlet, Tag
+from rss.worker import run as worker_run
 
 
 # Create your tests here.
@@ -124,19 +126,26 @@ class RestAPITestCase(TestCase):
                                              url='http://example2.org',
                                              language='en-GB',
                                              updated=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc))
-        self.author1 = Author(name='Author')
-        self.author2 = Author(name='Author 2', profile='http://plus.google.com/Author2', twitter='@author2')
+        self.author1 = Author(name='Author1')
+        self.author2 = Author(name='Author2', profile='http://plus.google.com/Author2', twitter='@author2')
         self.outlet1.author_set.add(self.author1)
         self.outlet1.author_set.add(self.author2)
 
-        self.article1 = Article(title='Title', summary='Summary', url='http://example.com/articles/1',
-                                pub_date=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc), content='Content')
-        self.article2 = Article(title='Title 2', summary='Summary 2', url='http://example.com/articles/2',
-                                pub_date=datetime.datetime(2002, 9, 7, 0, 1, 1, tzinfo=timezone.utc), content='Content 2')
+        self.article1 = Article(title='Title1', summary='Summary1', url='http://example.com/articles/1',
+                                pub_date=datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc),
+                                content='Content1')
+        self.article2 = Article(title='Title2', summary='Summary2', url='http://example.com/articles/2',
+                                pub_date=datetime.datetime(2002, 9, 7, 0, 1, 1, tzinfo=timezone.utc),
+                                content='Content2')
         self.outlet1.article_set.add(self.article1)
         self.outlet1.article_set.add(self.article2)
         self.article1.authors.add(self.author1, self.author2)
         self.article2.authors.add(self.author1)
+
+        self.tag1 = Tag.objects.create(term='Tag1')
+        self.tag2 = Tag.objects.create(term='Tag2')
+        self.article1.tags.add(self.tag1)
+        self.article2.tags.add(self.tag2)
 
     def test_outlets_api(self):
         expected = [self.outlet1.__data__(), self.outlet2.__data__()]  # Ordered by name
@@ -183,19 +192,26 @@ class RestAPITestCase(TestCase):
 
         self.assertEqual(deserialized_data, expected)
 
-    def test_articles_api(self):
-        expected = [self.article2.__data__(), self.article1.__data__()]  # Ordered by publication date from newest to oldest
+    def test_all_authors_api(self):
+        expected = [self.author1.__data__(), self.author2.__data__()]  # Ordered by name
 
-
-        response = views.articles(self.factory.get('/rss/outlets/1/articles/'), self.outlet1.id)
+        response = views.all_authors(self.factory.get('/rss/authors/'))
 
         self.assertEqual(response.status_code, 200)
 
         deserialized_data = json.loads(response.content)
 
-        # API response will provide date as text field so we have to parse here in order for the compare to succeed
-        for article in deserialized_data:
-            article['date'] = dateparse.parse_datetime(article['date'])
+        self.assertEqual(deserialized_data, expected)
+
+    def test_articles_api(self):
+        expected = [self.article2.__data__(),
+                    self.article1.__data__()]  # Ordered by publication date from newest to oldest
+
+        response = views.articles(self.factory.get('/rss/outlets/1/articles/'), self.outlet1.id)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
 
         self.assertEqual(deserialized_data, expected)
 
@@ -206,9 +222,139 @@ class RestAPITestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-        deserialized_data = json.loads(response.content)
-        
-        # API response will provide date as text field so we have to parse here in order for the compare to succeed
-        deserialized_data['date'] = dateparse.parse_datetime(deserialized_data['date'])
+        deserialized_data = parse(response.content, 'date')
 
-        self.assertDictEqual(deserialized_data, expected)
+        self.assertEqual(deserialized_data, expected)
+
+    def test_all_articles_api(self):
+        expected = [self.article2.__data__(),
+                    self.article1.__data__()]  # Ordered by publication date from newest to oldest
+
+        response = views.all_articles(self.factory.get('/rss/articles/'))
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_tags_api(self):
+        expected = [self.tag1.__data__(), self.tag2.__data__()]
+
+        response = views.tags(self.factory.get('/rss/tags'))
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content)
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_article_by_tags_api(self):
+        expected = [self.article1.__data__()]
+
+        response = views.articles_by_tag(self.factory.get('/rss/tags/Tag1/articles/'), 'Tag1')
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
+
+        self.assertEqual(deserialized_data, expected)
+
+    def test_articles_search(self):
+        test_tuples = [
+            # Articles search should search in articles title
+            ([self.article1.__data__()], 'title1'),
+            ([self.article2.__data__()], 'title2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'title'),
+
+            # Articles search should search in articles summary
+            ([self.article1.__data__()], 'summary1'),
+            ([self.article2.__data__()], 'summary2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'summary'),
+
+            # Articles search should search in articles content
+            ([self.article1.__data__()], 'content1'),
+            ([self.article2.__data__()], 'content2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'content'),
+
+            # Articles search should search in articles tags
+            ([self.article1.__data__()], 'tag1'),
+            ([self.article2.__data__()], 'tag2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'tag'),
+
+            # Articles search should search in articles authors
+            ([self.article2.__data__(), self.article1.__data__()], 'author1'),
+            ([self.article1.__data__()], 'author2'),
+            ([self.article2.__data__(), self.article1.__data__()], 'author')
+        ]
+
+        for expected, term in test_tuples:
+            self.article_search_test(expected, term)
+
+
+    def article_search_test(self, expected, term):
+        endpoint = '/rss/articles/search/%s/' % term
+        response = views.articles_search(self.factory.get(endpoint), term)
+
+        self.assertEqual(response.status_code, 200)
+
+        deserialized_data = parse(response.content, 'date')
+
+        self.assertEqual(deserialized_data, expected)
+
+
+class WorkerTestCase(TestCase):
+    def setUp(self):
+        self.valid_outlet = Outlet.objects.create(name='Sample Feed', description='For documentation <em>only</em>',
+                                                  url='http://example.org/', rss_url=RSSFeedTestCase.valid_rss)
+        self.invalid_outlet = Outlet(name='Invalid Feed', description='Invalid', url='http://invalid.org',
+                                     rss_url=RSSFeedTestCase.invalid_rss)
+
+    def test_worker_run_valid_outlet(self):
+        self.assertIsNone(self.valid_outlet.updated)
+        worker_run()
+        updated_outlet = Outlet.objects.get(pk=self.valid_outlet.id)
+        self.assertEqual(updated_outlet.updated, datetime.datetime(2002, 9, 7, 0, 0, 1, tzinfo=timezone.utc))
+
+        articles = self.valid_outlet.article_set.all()
+        self.assertEqual(len(articles), 1)
+
+        article = articles[0]
+
+        self.assertEqual(article.title, u'First entry title')
+        self.assertEqual(article.summary, u'Watch out for <span>nasty\n    tricks</span>')
+        self.assertEqual(article.url, u'http://example.org/entry/3')
+        self.assertEqual(article.pub_date, datetime.datetime(2002, 9, 5, 0, 0, 1, tzinfo=timezone.utc))
+        self.assertEqual(article.content, None)
+
+    def test_worker_run_invalid_outlet(self):
+        try:
+            self.invalid_outlet.save()
+            self.assertRaises(ValueError, worker_run)
+        finally:
+            self.invalid_outlet.delete()
+
+
+def parse(data, datetime_field=None):
+    """
+    API response serializes datetime fields as string and json.loads does not parse it back as a datetime.
+    This function takes care of it
+
+    :param data: The JSON serialized string
+    :param datetime_field: The key on the dictionary that contains a datetime field
+    :return: The deserialized data
+    """
+
+    parsed_data = json.loads(data)
+    if datetime_field:
+        if isinstance(parsed_data, list):
+            for item in parsed_data:
+                date = item.get(datetime_field)
+                if date:
+                    item[datetime_field] = dateparse.parse_datetime(date)
+        elif isinstance(parsed_data, dict):
+            date = parsed_data.get(datetime_field)
+            if date:
+                parsed_data[datetime_field] = dateparse.parse_datetime(date)
+
+    return parsed_data
